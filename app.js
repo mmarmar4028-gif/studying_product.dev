@@ -111,7 +111,8 @@
       h('div', { class: 'card' },
         h('h2', {}, 'Карта курса'),
         h('p', { html: 'Курс построен на метафоре: продукт должен быть <b>правильной вещью</b> (нужен людям и выгоден) и должен быть <b>сделан правильно</b>.' }),
-        h('div', { class: 'matrix', html: '<div class="lbl">Делать правильные вещи</div><div class="cell a">Продуктовое мышление<br>(темы 1–2)</div><div class="cell b">Экономика продукта<br>(тема 3)</div><div class="lbl">Делать вещи правильно</div><div class="cell c">Команда и процесс<br>(темы 4–5)</div><div class="cell d">Технические практики<br>(темы 5–6)</div>' })),
+        h('div', { class: 'matrix', html: '<div class="lbl">Делать правильные вещи</div><div class="cell a">Продуктовое мышление<br>(темы 1–2)</div><div class="cell b">Экономика продукта<br>(тема 3)</div><div class="lbl">Делать вещи правильно</div><div class="cell c">Команда и процесс<br>(темы 4–5)</div><div class="cell d">Технические практики<br>(темы 5–7)</div>' }),
+        h('p', { class: 'muted', style: { fontSize: '14.5px' } }, 'Тема 8 (финальная игра) соединяет всё вместе: исследования, юнит-экономику, команды и инфраструктуру.')),
       h('h2', { style: { marginTop: '26px' } }, 'Темы'),
       (() => {
         const g = h('div', { class: 'topic-grid' });
@@ -437,6 +438,78 @@
       out.innerHTML = `<div class="result-box">${q.map(([l], i) => line(l, names[lv[i]])).join('')}${line('Общий уровень (по самой слабой метрике)', names[worst], 'total')}</div>`;
     };
     sels.forEach((s, i) => { s.onchange = calc; el.append(h('div', { class: 'match-row' }, h('div', {}, q[i][0]), s)); });
+    calc(); el.append(out);
+  };
+
+  // Надёжность системы: модули последовательно, серверы параллельно (игры «Надёжность ПО/серверов», «Горизонтальное масштабирование»)
+  W.reliability = (el) => {
+    const SERVERS = { 'Lazure 85%': 85, 'Gcloud 90%': 90, 'Bundex 95%': 95 };
+    const mods = [{ name: 'A', r: 70, srv: ['Lazure 85%', 'Bundex 95%'] }, { name: 'B', r: 80, srv: ['Gcloud 90%'] }, { name: 'C', r: 90, srv: ['Lazure 85%', 'Gcloud 90%'] }];
+    const box = h('div'), out = h('div', { class: 'result-box' });
+    const pct = x => (x * 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + '%';
+    const calc = () => {
+      let total = 1, rows = '';
+      mods.forEach(m => {
+        const reps = m.srv.map(s => m.r / 100 * SERVERS[s] / 100);
+        const modRel = reps.length ? 1 - reps.reduce((p, r) => p * (1 - r), 1) : 0;
+        total *= modRel;
+        rows += line(`Модуль ${m.name}: ${reps.length ? reps.map(pct).join(' ∥ ') : 'нет серверов'}`, pct(modRel));
+      });
+      out.innerHTML = rows + line('Система = A × B × C', pct(total), 'total ' + (total >= 0.9 ? 'pos' : 'neg')) +
+        `<div class="fb ${total >= 0.99 ? 'good' : total >= 0.9 ? 'good' : 'bad'}" style="margin-top:8px">${total >= 0.99 ? 'Цель 99% достигнута!' : total >= 0.9 ? 'Цель 90% достигнута. Попробуй дотянуть до 99%.' : 'Пока ниже 90%. Добавь серверы самому слабому модулю.'}</div>`;
+    };
+    const draw = () => {
+      box.innerHTML = '';
+      mods.forEach(m => {
+        const val = h('b', {}, m.r + '%');
+        const row = h('div', { class: 'mini', style: { marginBottom: '8px' } },
+          h('div', { class: 'slider' }, h('div', { class: 'lab' }, h('span', {}, `Надёжность кода модуля ${m.name}`), val),
+            h('input', { type: 'range', min: 50, max: 100, step: 5, value: m.r, oninput: e => { m.r = +e.target.value; val.textContent = m.r + '%'; calc(); } })),
+          h('div', { class: 'row' }, m.srv.map((s, i) => h('button', { class: 'btn small', title: 'Убрать сервер', onclick: () => { m.srv.splice(i, 1); draw(); } }, '🖥 ' + s + ' ✕')),
+            h('select', { style: { width: 'auto' }, onchange: e => { if (e.target.value) { m.srv.push(e.target.value); draw(); } } }, h('option', { value: '' }, '+ сервер'), Object.keys(SERVERS).map(s => h('option', { value: s }, s)))));
+        box.append(row);
+      });
+      calc();
+    };
+    draw();
+    el.append(h('div', { class: 'calc-grid' }, box, out),
+      h('p', { class: 'muted', style: { fontSize: '13.5px', marginTop: '8px' } }, 'Надёжность копии модуля = надёжность кода × надёжность сервера. Копии одного модуля работают параллельно: модуль упадёт, только если упадут все копии. Модули соединены последовательно: система работает, только если работают все. По умолчанию стоит пример со слайда игры «Горизонтальное масштабирование» (≈59,5%).'));
+  };
+
+  // Девятки доступности
+  W.nines = (el) => {
+    const opts = [90, 99, 99.9, 99.99, 99.999, 99.9999];
+    const sel = h('select', { style: { maxWidth: '240px' } }, opts.map(o => h('option', { value: o }, o.toLocaleString('ru-RU') + '%')));
+    sel.value = '99.9';
+    const out = h('div', { class: 'result-box' });
+    const fmtDur = m => m >= 1440 ? (m / 1440).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' дн.' : m >= 60 ? (m / 60).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' ч' : m >= 1 ? m.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' мин' : (m * 60).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' сек';
+    const calc = () => { const a = +sel.value, down = 1 - a / 100; out.innerHTML = line('Простой в год', fmtDur(down * 525600)) + line('Простой в месяц', fmtDur(down * 43800)) + line('Простой в неделю', fmtDur(down * 10080)); };
+    sel.onchange = calc; calc();
+    el.append(h('div', { class: 'row' }, h('span', {}, 'Доступность (SLA):'), sel), out);
+  };
+
+  // NPS
+  W.nps = (el) => {
+    const s = { pro: 50, pas: 30, det: 20 };
+    const out = h('div', { class: 'result-box' });
+    const calc = () => {
+      const tot = s.pro + s.pas + s.det || 1, p = s.pro / tot * 100, d = s.det / tot * 100, nps = p - d;
+      out.innerHTML = line('Промоутеры (9–10)', p.toFixed(0) + '%', 'pos') + line('Пассивы (7–8)', (s.pas / tot * 100).toFixed(0) + '%') + line('Детракторы (0–6)', d.toFixed(0) + '%', 'neg') + line('NPS = % промоутеров − % детракторов', (nps > 0 ? '+' : '') + nps.toFixed(0), 'total ' + (nps >= 0 ? 'pos' : 'neg'));
+    };
+    sliders(el, s, [['pro', 'Сколько ответили 9–10', 0, 100, 1, v => v + ' чел.'], ['pas', 'Сколько ответили 7–8', 0, 100, 1, v => v + ' чел.'], ['det', 'Сколько ответили 0–6', 0, 100, 1, v => v + ' чел.']], calc);
+    calc(); el.append(out);
+  };
+
+  // Финальная игра: цвет эффективности рекламы
+  W.adcolor = (el) => {
+    const s = { price: 30, margin: 20, churn: 80, cpa: 20 };
+    const out = h('div', { class: 'result-box' });
+    const calc = () => {
+      const arpu = s.price * s.margin / 100, ltv = arpu / (s.churn / 100);
+      const zone = s.cpa < arpu ? ['🟢 Зелёный', 'pos', 'Реклама окупается уже на первом платеже клиента.'] : s.cpa < ltv ? ['🟡 Жёлтый', '', 'Реклама окупится за несколько ходов, пока клиент платит.'] : ['🔴 Красный', 'neg', 'Прямой убыток: клиент за всю жизнь принесёт меньше, чем стоил.'];
+      out.innerHTML = line('ARPU = цена × маржа (за ход)', arpu.toLocaleString('ru-RU', { maximumFractionDigits: 1 })) + line('LTV = ARPU ÷ отток', ltv.toLocaleString('ru-RU', { maximumFractionDigits: 1 })) + line('CPA', s.cpa) + line('Зона', zone[0], 'total ' + zone[1]) + `<div class="fb ${zone[1] === 'neg' ? 'bad' : 'good'}" style="margin-top:8px">${zone[2]}</div>`;
+    };
+    sliders(el, s, [['price', 'Цена подписки за ход', 10, 100, 5, v => v], ['margin', 'Маржа', 5, 80, 5, v => v + '%'], ['churn', 'Отток за ход', 10, 100, 5, v => v + '%'], ['cpa', 'CPA (цена привлечения клиента)', 1, 60, 1, v => v]], calc);
     calc(); el.append(out);
   };
 
